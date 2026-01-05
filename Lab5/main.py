@@ -5,8 +5,8 @@ Main module of the RSimple → CIL translator
 import sys
 import os
 import subprocess
-from lexer import Lexer
-from parser import Parser
+from Lab5.lexer import Lexer
+from Lab5.parser import Parser
 from cil_generator import CILGenerator
 from postfix_translator import save_postfix_to_file, print_postfix_code, PostfixMachine
 
