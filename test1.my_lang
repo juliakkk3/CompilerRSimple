@@ -242,6 +242,14 @@ p7 <- 7
 p8 <- 8
 p9 <- 9
 p10 <- 10
+
+# Тест 22
+
+a <- 10
+b <- 20
+sum <- a + b
+
+
 print(p1)
 print(p2)
 print(p3)
@@ -252,3 +260,21 @@ print(p7)
 print(p8)
 print(p9)
 print(p10)
+
+print(sum)
+
+
+
+# Калькулятор площі кола
+radius <- 5
+pi <- 3.14159
+
+area <- pi * radius ^ 2
+circumference <- 2 * pi * radius
+
+print(area)
+print(circumference)
+
+
+x <- 711
+print(x)

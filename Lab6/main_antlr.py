@@ -1,9 +1,11 @@
 import sys
+import os
 from antlr4 import *
 from RSimpleLexer import RSimpleLexer
 from RSimpleParser import RSimpleParser
 from Lab6.compiler_visitor import RSimpleCompilerVisitor
 from cil_generator import CILGenerator
+from Lab5.main import run_ilasm
 
 
 def compile_with_antlr(source_file):
@@ -56,23 +58,40 @@ def compile_with_antlr(source_file):
     print('\n' + '='*70)
     print('КРОК 4: ГЕНЕРАЦІЯ CIL-КОДУ')
     print('='*70)
+
+    # Визначаємо ім'я збірки з вхідного файлу
+    assembly_name = os.path.splitext(os.path.basename(source_file))[0] + '_antlr'
+    output_file = f'{assembly_name}.il'
+
     cil_gen = CILGenerator(
         visitor.postfix_code,
         visitor.variable_table,
-        'test_antlr'
+        assembly_name
     )
-    cil_gen.save_to_file('test_antlr.il')
+    cil_gen.save_to_file(output_file)
+
+    # ========== КРОК 5: КОМПІЛЯЦІЯ CIL → EXE ==========
+    ilasm_success = run_ilasm(output_file)
 
     # ========== ПІДСУМОК ==========
     print('\n' + '='*70)
     print('✓ КОМПІЛЯЦІЯ ЗАВЕРШЕНА УСПІШНО!')
     print('='*70)
-    print('\nЗгенеровано файлів:')
-    print('  - test_antlr.il (CIL код)')
-    print('\nДля створення .exe:')
-    print('  ilasm test_antlr.il')
-    print('\nДля запуску:')
-    print('  .\\test_antlr.exe')
+    print(f'\nВхідний файл:  {source_file}')
+    print(f'Вихідний файл: {output_file}')
+
+    if ilasm_success:
+        exe_file = output_file.replace('.il', '.exe')
+        print(f'Виконуваний файл: {exe_file}')
+        print(f'\nДля запуску програми:')
+        print(f'  {exe_file}')
+        print(f'  або: .\\{os.path.basename(exe_file)}')
+    else:
+        print(f'\nДля створення виконуваного файлу використайте:')
+        print(f'  ilasm {output_file}')
+        print(f'\nДля запуску:')
+        print(f'  {assembly_name}.exe')
+
     print('='*70)
 
     return True

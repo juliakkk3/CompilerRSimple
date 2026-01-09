@@ -7,18 +7,18 @@ class Parser:
     """Синтаксичний аналізатор з генерацією постфікс-коду"""
 
     def __init__(self, table_of_symbols):
-        self.tableOfSymb = table_of_symbols
-        self.len_tableOfSymb = len(table_of_symbols)
-        self.numRow = 1
-        self.tableOfVar = {}
-        self.postfixCode = []
-        self.labelCounter = 0
-        self.success = False
+        self.tableOfSymb = table_of_symbols       # Таблиця символів (токенів) з лексера
+        self.len_tableOfSymb = len(table_of_symbols)  # Кількість токенів
+        self.numRow = 1                           # Номер поточного рядка в таблиці
+        self.tableOfVar = {}                      # Таблиця змінних {ім'я: (індекс, тип, ініціалізована)}
+        self.postfixCode = []                     # Постфікс-код (результат)
+        self.labelCounter = 0                     # Лічильник міток для JMP/JF
+        self.success = False                      # Прапорець успішності розбору
 
     # ============= ДОПОМІЖНІ МЕТОДИ =============
 
     def generateLabel(self):
-        """Генерує унікальну мітку"""
+        """Генерує унікальну мітку для переходів"""
         self.labelCounter += 1
         return f"m{self.labelCounter}"
 
@@ -35,7 +35,7 @@ class Parser:
         return numLine, lexeme, token
 
     def parseToken(self, lexeme, token):
-        """Розбирає конкретний токен"""
+        """Розбирає конкретний токен (перевіряє відповідність)"""
         if self.numRow > self.len_tableOfSymb:
             self.failParse('неочікуваний кінець програми', (lexeme, token, self.numRow))
 
@@ -103,7 +103,7 @@ class Parser:
     # ============= РОБОТА З ТАБЛИЦЕЮ ЗМІННИХ =============
 
     def addVarToTable(self, ident, varType):
-        """Додає змінну до таблиці"""
+        """Додає змінну до таблиці або оновлює її тип"""
         if ident not in self.tableOfVar:
             index = len(self.tableOfVar) + 1
             self.tableOfVar[ident] = (index, varType, False)
@@ -114,7 +114,7 @@ class Parser:
             print(f'  ├─ Оновлено тип змінної {ident}: {oldType} → {varType}')
 
     def getVarType(self, ident):
-        """Отримує тип змінної"""
+        """Отримує тип змінної з таблиці"""
         if ident not in self.tableOfVar:
             return 'undeclared'
         return self.tableOfVar[ident][1]
@@ -135,7 +135,7 @@ class Parser:
     # ============= РОЗБІР ПРОГРАМИ =============
 
     def parse(self):
-        """Головний метод розбору"""
+        """Головний метод розбору програми"""
         try:
             print('parseProgram()')
             self.parseStatementList()
@@ -205,7 +205,7 @@ class Parser:
         # Вираз
         exprType = self.parseExpression()
 
-        # Семантика
+        # Семантична перевірка типів
         if ident not in self.tableOfVar:
             self.addVarToTable(ident, exprType)
         else:
@@ -226,6 +226,7 @@ class Parser:
         self.parseToken('print', 'keyword')
         self.parseToken('(', 'brackets_op')
 
+        # Розбір списку виразів через кому
         while True:
             exprType = self.parseExpression()
             self.addToPostfix('print')
@@ -247,26 +248,31 @@ class Parser:
         self.parseToken('if', 'keyword')
         self.parseToken('(', 'brackets_op')
 
+        # Умова
         condType = self.parseExpression()
         self.parseToken(')', 'brackets_op')
 
+        # Мітка для else або кінця if
         label_else = self.generateLabel()
         self.addToPostfix(label_else)
-        self.addToPostfix('JF')
+        self.addToPostfix('JF')  # Перехід на else, якщо умова хибна
 
+        # Then-блок
         self.parseStatementBlock()
 
+        # Перевірка наявності else
         numLine, lex, tok = self.getSymb()
         if lex == 'else':
             self.numRow += 1
+            # Мітка для кінця всього if-else
             label_end = self.generateLabel()
             self.addToPostfix(label_end)
-            self.addToPostfix('JMP')
-            self.addToPostfix(f"{label_else}:")
+            self.addToPostfix('JMP')  # Пропустити else
+            self.addToPostfix(f"{label_else}:")  # Початок else
             self.parseStatementBlock()
-            self.addToPostfix(f"{label_end}:")
+            self.addToPostfix(f"{label_end}:")  # Кінець if-else
         else:
-            self.addToPostfix(f"{label_else}:")
+            self.addToPostfix(f"{label_else}:")  # Кінець if
 
         return True
 
@@ -278,21 +284,26 @@ class Parser:
         self.parseToken('while', 'keyword')
         self.parseToken('(', 'brackets_op')
 
+        # Мітка початку циклу
         label_start = self.generateLabel()
         self.addToPostfix(f"{label_start}:")
 
+        # Умова
         condType = self.parseExpression()
         self.parseToken(')', 'brackets_op')
 
+        # Мітка виходу з циклу
         label_end = self.generateLabel()
         self.addToPostfix(label_end)
-        self.addToPostfix('JF')
+        self.addToPostfix('JF')  # Вихід з циклу, якщо умова хибна
 
+        # Тіло циклу
         self.parseStatementBlock()
 
+        # Повернення на початок циклу
         self.addToPostfix(label_start)
         self.addToPostfix('JMP')
-        self.addToPostfix(f"{label_end}:")
+        self.addToPostfix(f"{label_end}:")  # Кінець циклу
 
         return True
 
@@ -302,6 +313,7 @@ class Parser:
         numLine, lex, tok = self.getSymb()
 
         if lex == '{':
+            # Блок операторів у фігурних дужках
             self.numRow += 1
             while True:
                 numLine, lex, tok = self.getSymb()
@@ -310,6 +322,7 @@ class Parser:
                     break
                 self.parseStatement()
         else:
+            # Один оператор без дужок
             self.parseStatement()
 
         return True
@@ -321,19 +334,23 @@ class Parser:
         print('  parseExpression()')
         numLine, lex, tok = self.getSymb()
 
+        # Булева константа (TRUE/FALSE)
         if lex in ('TRUE', 'FALSE'):
             self.numRow += 1
             self.addToPostfix(lex)
             return 'logical'
 
+        # Арифметичний вираз (можливо з порівнянням)
         leftType = self.parseArithmExpression()
 
+        # Перевірка на оператор відношення
         numLine, lex, tok = self.getSymb()
         if tok == 'rel_op':
             relOp = lex.strip()
             self.numRow += 1
             rightType = self.parseArithmExpression()
 
+            # Семантична перевірка типів
             if leftType != rightType:
                 self.failSem('невідповідність типів',
                            (numLine, leftType, relOp, rightType))
@@ -348,6 +365,7 @@ class Parser:
         print('  parseArithmExpression()')
         leftType = self.parseTerm()
 
+        # Обробка додавання/віднімання
         while True:
             numLine, lex, tok = self.getSymb()
             if tok == 'add_op':
@@ -355,6 +373,7 @@ class Parser:
                 self.numRow += 1
                 rightType = self.parseTerm()
 
+                # Семантична перевірка типів
                 if leftType != rightType:
                     self.failSem('невідповідність типів',
                                (numLine, leftType, op, rightType))
@@ -370,6 +389,7 @@ class Parser:
         print('  parseTerm()')
         leftType = self.parsePower()
 
+        # Обробка множення/ділення
         while True:
             numLine, lex, tok = self.getSymb()
             if tok == 'mult_op':
@@ -377,6 +397,7 @@ class Parser:
                 self.numRow += 1
                 rightType = self.parsePower()
 
+                # Семантична перевірка типів
                 if leftType != rightType:
                     self.failSem('невідповідність типів',
                                (numLine, leftType, op, rightType))
@@ -388,15 +409,17 @@ class Parser:
         return leftType
 
     def parsePower(self):
-        """Power = Factor ['^' Power]"""
+        """Power = Factor ['^' Power] (правоасоціативна операція)"""
         print('  parsePower()')
         leftType = self.parseFactor()
 
+        # Степінь (правоасоціативна)
         numLine, lex, tok = self.getSymb()
         if tok == 'power_op':
             self.numRow += 1
-            rightType = self.parsePower()
+            rightType = self.parsePower()  # Рекурсивний виклик для правої асоціативності
 
+            # Семантична перевірка типів
             if leftType != rightType:
                 self.failSem('невідповідність типів',
                            (numLine, leftType, '^', rightType))
@@ -410,14 +433,16 @@ class Parser:
         print('  parseFactor()')
         numLine, lex, tok = self.getSymb()
 
+        # Перевірка на унарний мінус
         hasUnaryMinus = False
         if tok == 'add_op' and lex == '-':
             hasUnaryMinus = True
             self.numRow += 1
             numLine, lex, tok = self.getSymb()
 
-        # Primary
+        # Primary (базовий елемент)
         if tok in ('intnum', 'realnum'):
+            # Числова константа
             self.addToPostfix(lex)
             self.numRow += 1
             if hasUnaryMinus:
@@ -425,11 +450,13 @@ class Parser:
             return 'numeric'
 
         elif tok == 'boolval':
+            # Булева константа
             self.addToPostfix(lex)
             self.numRow += 1
             return 'logical'
 
         elif tok == 'id':
+            # Ідентифікатор (змінна)
             if lex not in self.tableOfVar:
                 self.failSem('використання неоголошеної змінної', (numLine, lex))
             if not self.isVarInitialized(lex):
@@ -445,6 +472,7 @@ class Parser:
             return varType
 
         elif lex == 'scan':
+            # Введення з клавіатури
             self.numRow += 1
             self.parseToken('(', 'brackets_op')
             self.parseToken(')', 'brackets_op')
@@ -452,6 +480,7 @@ class Parser:
             return 'numeric'
 
         elif lex == '(':
+            # Вираз у дужках
             self.numRow += 1
             exprType = self.parseArithmExpression()
             self.parseToken(')', 'brackets_op')
@@ -475,7 +504,7 @@ class Parser:
         return self.tableOfVar
 
     def reset(self):
-        """Скидає стан парсера"""
+        """Скидає стан парсера до початкового"""
         self.numRow = 1
         self.tableOfVar = {}
         self.postfixCode = []
