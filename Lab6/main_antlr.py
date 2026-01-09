@@ -7,7 +7,6 @@ from Lab6.compiler_visitor import RSimpleCompilerVisitor
 from cil_generator import CILGenerator
 from Lab5.main import run_ilasm
 
-
 def compile_with_antlr(source_file):
     """Компілює RSimple програму використовуючи ANTLR4"""
 
